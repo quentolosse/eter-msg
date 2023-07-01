@@ -1,11 +1,13 @@
 package com.quentolosse.etermsg.bungee.commands;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.collect.Maps;
 import com.quentolosse.etermsg.bungee.MsgEventListener;
 
 import net.md_5.bungee.api.CommandSender;
@@ -18,9 +20,10 @@ import net.md_5.bungee.config.Configuration;
 
 public class Msg extends Command implements TabExecutor {
 
-    String sendFormat, chatFormat, pseudoFormat, receiveFormat;
+    String sendFormat, chatFormat, pseudoFormat, receiveFormat, mdLogFormat, consoleLogFormat;
     MsgEventListener listener;
-    Map<String,String> lastMsg = Collections.emptyMap();
+    Map<String,String> lastMsg = Maps.newHashMap();
+
 
     public Msg(Configuration config, MsgEventListener listener){
 
@@ -30,6 +33,8 @@ public class Msg extends Command implements TabExecutor {
         this.receiveFormat = config.getString("msg-receive").replace("&", "§");
         this.chatFormat = config.getString("chat-format").replace("&", "§");
         this.pseudoFormat = config.getString("pseudo-format").replace("&", "§");
+        this.mdLogFormat = config.getString("msg-md-log-format").replace("&", "§");
+        this.consoleLogFormat = config.getString("msg-console-log-format").replace("&", "§");
 
     }
 
@@ -38,7 +43,7 @@ public class Msg extends Command implements TabExecutor {
         
         if (args.length == 1) {
             
-            Set<String> joueurs =  new HashSet<String>();;
+            Set<String> joueurs = new HashSet<>();
             for(ProxiedPlayer player : ProxyServer.getInstance().getPlayers()){
 
                 if (player.getName().startsWith(args[0])) {
@@ -49,7 +54,7 @@ public class Msg extends Command implements TabExecutor {
 
             }
 
-            String[] ret = joueurs.toArray(new String[joueurs.size()]);
+            String[] ret = joueurs.toArray(new String[0]);
 
             return Arrays.asList(ret);
         }
@@ -91,6 +96,22 @@ public class Msg extends Command implements TabExecutor {
         for (int i = 1; i < args.length; i++){
             String arg = (args[i] + " ");
             message = (message + arg);
+        }
+
+        String logConsole = consoleLogFormat.replace("%{sender}", sender.getName()).replace("%{receiver}", targetPlayer.getName()).replace("%{message}", message);
+        
+        System.out.println(logConsole);
+        String log = mdLogFormat.replace("%{sender}", sender.getName()).replace("%{receiver}", targetPlayer.getName()).replace("%{message}", message);
+
+        BufferedWriter bw = null;
+        try {
+            bw = new BufferedWriter(new FileWriter("chatLog.md", true));
+            bw.write(log);
+            bw.newLine();
+            bw.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
         }
 
         targetPlayer.sendMessage(new ComponentBuilder(receiveFormat.replace("%{player}", sender.getName()).replace("%{message}", message)).create());

@@ -1,4 +1,5 @@
 name: EterMsg
 author: Quentolosse
 version: 1.0
-main: com.quentolosse.etermsg.bungee.main
+main: com.quentolosse.etermsg.bungee.Main
+depends: ["LuckPerms"]

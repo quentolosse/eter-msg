@@ -1,23 +1,20 @@
 package com.quentolosse.etermsg.bungee;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.Maps;
 
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.cacheddata.CachedMetaData;
@@ -29,6 +26,7 @@ import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.event.PluginMessageEvent;
 import net.md_5.bungee.api.event.PostLoginEvent;
 import net.md_5.bungee.api.plugin.Listener;
+import net.md_5.bungee.api.plugin.Plugin;
 import net.md_5.bungee.config.Configuration;
 import net.md_5.bungee.event.EventHandler;
 
@@ -48,13 +46,13 @@ public class MsgEventListener implements Listener{
 
     }
 
+    Plugin main;
     String joinFormat, leaveFormat, defaultPrefix, chatFormat, pseudoFormat, logFormat, consoleFormat;
-    Map<String, group> groupesServeurs = Collections.emptyMap();
-    Map<String, String> groupeDuServeur = Collections.emptyMap();
-
+    Map<String, group> groupesServeurs;
+    Map<String, String> groupeDuServeur;
     LuckPerms api;
 
-    public MsgEventListener (Configuration config, LuckPerms api){
+    public MsgEventListener (Configuration config, LuckPerms api, Plugin main){
 
         this.joinFormat = config.getString("join-format").replace("&", "§");
         this.leaveFormat = config.getString("leave-format").replace("&", "§");
@@ -63,9 +61,12 @@ public class MsgEventListener implements Listener{
         this.pseudoFormat = config.getString("pseudo-format").replace("&", "§");
         this.logFormat = config.getString("md-log-format");
         this.consoleFormat = config.getString("console-log-format");
+        this.main = main;
 
         List<?> temp = config.getList("groups");
-        
+
+        groupesServeurs = Maps.newHashMap();
+        groupeDuServeur = Maps.newHashMap();
         
         ArrayList<LinkedHashMap> groupes = (ArrayList<LinkedHashMap>)temp; 
 
@@ -90,25 +91,25 @@ public class MsgEventListener implements Listener{
     
     @EventHandler
     public void onLogin(final PostLoginEvent event){
+
         ProxiedPlayer player = event.getPlayer();
         CachedMetaData metaData = this.api.getPlayerAdapter(ProxiedPlayer.class).getMetaData(player);
         String prefix = metaData.getPrefix().replace("&", "§");
 
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        
-        if (ProxyServer.getInstance().getPlayers().contains(player)){
+        ProxyServer.getInstance().getScheduler().schedule(main, new Runnable() {
+            @Override
+            public void run() {
+                if (ProxyServer.getInstance().getPlayers().contains(player)){
 
-            String toSend = this.joinFormat.replace("%{prefix}", prefix).replace("%{player}", player.getName());
-            ProxyServer.getInstance().broadcast(new ComponentBuilder(toSend).create());
+                    String toSend = joinFormat.replace("%{prefix}", prefix).replace("%{player}", player.getName());
+                    ProxyServer.getInstance().broadcast(new ComponentBuilder(toSend).create());
 
-        }
-        else{
-            System.out.println("Silent join : " + player.getName());
-        }
+                }
+                else{
+                    System.out.println("Silent join : " + player.getName());
+                }
+            }
+        }, 2, TimeUnit.SECONDS);
     }
 
     @EventHandler
@@ -174,43 +175,20 @@ public class MsgEventListener implements Listener{
         }
 
         String logConsole = consoleFormat.replace("%{serveur}", serveur.substring(0, 3).toUpperCase()).replace("%{prefix}", prefix).replace("%{player}", player.getName()).replace("%{message}", message);
+        
         System.out.println(logConsole);
-
         String log = logFormat.replace("%{serveur}", serveur.substring(0, 3).toUpperCase()).replace("%{prefix}", prefix).replace("%{player}", player.getName()).replace("%{message}", message);
 
-        BufferedReader br = null;
         BufferedWriter bw = null;
         try {
-            br = new BufferedReader(new FileReader("chatLog.md"));
-            bw = new BufferedWriter(new FileWriter("chatLog_temp.md"));
-            String line;
-            while ((line = br.readLine()) != null) {
-                bw.write(line+"\n");
-            }
+            bw = new BufferedWriter(new FileWriter("chatLog.md", true));
             bw.write(log);
+            bw.newLine();
+            bw.close();
         } catch (Exception e) {
+            e.printStackTrace();
             return;
-        } finally {
-            try {
-                if(br != null)
-                br.close();
-            } catch (IOException e) {
-                //
-            }
-            try {
-                if(bw != null)
-                bw.close();
-            } catch (IOException e) {
-                //
-            }
         }
-
-        File oldFile = new File("chatLog.md");
-        oldFile.delete();
-
-        File newFile = new File("chatLog_temp.md");
-        newFile.renameTo(oldFile);
-
 
         for(ProxiedPlayer receiver : receivers){
             
@@ -221,7 +199,7 @@ public class MsgEventListener implements Listener{
                 for (String part : messageWithoutMentions) {
                     messageWithNoMentions = messageWithNoMentions.concat(part);
                 }
-                int i = 0; // déso pour ce nom pas très explicit, j'avais pas d'idées ¯\_(ツ)_/¯  ...  Comment ça personne ne lit mon code ?
+                int i = 0;
                 for (String part : messageWithoutMentions) {
                     messagePseudoFormat = messagePseudoFormat.concat(messageWithNoMentions.substring(i, i + part.length()));
                     messagePseudoFormat = messagePseudoFormat.concat(pseudoFormat);
@@ -234,7 +212,7 @@ public class MsgEventListener implements Listener{
             else {
                 messagePseudoFormat = message;
             }
-                
+            
             String messageMention = messagePseudoFormat.replace("%{pseudo}", receiver.getName());
             String toSend = chatFormat.replace("%{prefix}", prefix).replace("%{pseudo}", player.getName()).replace("%{message}", messageMention);
             receiver.sendMessage(new ComponentBuilder(toSend).create());

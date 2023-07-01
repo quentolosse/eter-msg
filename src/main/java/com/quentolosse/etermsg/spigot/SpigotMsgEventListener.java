@@ -23,7 +23,7 @@ public class SpigotMsgEventListener implements Listener{
         out.writeUTF(event.getPlayer().getName());
         out.writeUTF(event.getMessage());
 
-        event.getPlayer().sendPluginMessage(main.get_instance(), "chatmsg:msg", stream.toByteArray());
+        event.getPlayer().sendPluginMessage(Main.get_instance(), "chatmsg:msg", stream.toByteArray());
      
         event.setCancelled(true);
 
